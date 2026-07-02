@@ -8,7 +8,7 @@ import requests
 from flask import Flask
 
 # =============================================================
-# TIRK SYSTEMS v5.1 -- Полный бак (FULLY FIXED)
+# TIRK SYSTEMS v5.2 -- FULLY FIXED & READY
 # =============================================================
 
 # ============ 1. КОНФИГУРАЦИЯ И ОКРУЖЕНИЕ ============
@@ -394,14 +394,18 @@ def parse_fandom_astd(wikitext_clean):
         if not line:
             continue
 
-        cells = re.findall(r'\|\s*([^|]*(r'\{\{[^}]+\}\}[^|]*')*)', line)
+        # [ПОЧИНЕНО] Извлечение ячеек через split, синтаксическая ошибка убрана
+        cells = [c.strip() for c in line.split('|') if c.strip()]
+        if not cells:
+            continue
+
         if len(cells) >= 3:
-            code = cells[0].strip()
-            reward = cells[1].strip()
-            date = cells[2].strip()
+            code = cells[0]
+            reward = cells[1]
+            date = cells[2]
         elif len(cells) >= 2:
-            code = cells[0].strip()
-            reward = cells[1].strip()
+            code = cells[0]
+            reward = cells[1]
             date = ""
         else:
             continue
@@ -687,7 +691,7 @@ def get_steam_deals():
 @bot.message_handler(commands=['start'])
 def cmd_start(message):
     text = (
-        "<b>🤖 Tirk Systems v5.1 — Полный бак</b>\n"
+        "<b>🤖 Tirk Systems v5.2 — Полный бак</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "<b>🎮 Игровые промокоды:</b>\n"
         "  /genshin — Genshin Impact\n"
@@ -778,7 +782,7 @@ def cmd_steam(message):
 
 @bot.message_handler(commands=['status'])
 def cmd_status(message):
-    lines = ["<b>📊 Tirk Systems v5.1 — Статус</b>", "━━━━━━━━━━━━━━━━━━━━━━", ""]
+    lines = ["<b>📊 Tirk Systems v5.2 — Статус</b>", "━━━━━━━━━━━━━━━━━━━━━━", ""]
     games = [
         ('genshin', '🎮 Genshin Impact'),
         ('bloxfruits', '🍎 Blox Fruits'),
@@ -814,11 +818,11 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Tirk Systems v5.1 is online!"
+    return "Tirk Systems v5.2 is online!"
 
 @app.route('/health')
 def health():
-    return {"status": "ok", "version": "5.1", "timestamp": time.time()}
+    return {"status": "ok", "version": "5.2", "timestamp": time.time()}
 
 def run_flask():
     app.run(host='0.0.0.0', port=PORT)
@@ -829,7 +833,7 @@ def run_flask():
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("🚀 Tirk Systems v5.1 — Полный бак")
+    print("🚀 Tirk Systems v5.2 — Полный бак")
     print("=" * 60)
     print(f"📡 Flask-сервер: http://0.0.0.0:{PORT}")
     print(f"🤖 Telegram-бот: инициализация...")
