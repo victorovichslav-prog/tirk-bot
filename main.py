@@ -8,7 +8,7 @@ import requests
 from flask import Flask
 
 # =============================================================
-# TIRK SYSTEMS v5.0 -- Полный бак
+# TIRK SYSTEMS v5.1 -- Полный бак (FIXED)
 # =============================================================
 
 # ============ 1. КОНФИГУРАЦИЯ И ОКРУЖЕНИЕ ============
@@ -31,7 +31,7 @@ FANDOM_API = {
     'genshin': 'https://genshin-impact.fandom.com/api.php?action=parse&page=Promotional_Code&prop=wikitext&format=json',
     'bloxfruits': 'https://blox-fruits.fandom.com/api.php?action=parse&page=Codes&prop=wikitext&format=json',
     'kinglegacy': 'https://king-legacy.fandom.com/api.php?action=parse&page=Codes&prop=wikitext&format=json',
-    'astd': 'https://all-star-tower-defense.fandom.com/api.php?action=parse&page=Codes&prop=wikitext&format=json',
+    'astd': 'https://allstartd.fandom.com/api.php?action=parse&page=Codes&prop=wikitext&format=json',
 }
 
 # Reddit fallback
@@ -63,12 +63,18 @@ BACKUP_CODES = {
         {'code': 'ADMIN_STRENGTH', 'desc': '2x опыт'},
     ],
     'kinglegacy': [
-        {'code': 'UPDATE4', 'desc': '3x Gems'},
-        {'code': '1MVISITS', 'desc': '5x Gems'},
+        {'code': 'DinoxLive', 'desc': '+100,000 $'},
+        {'code': 'Peodiz', 'desc': '+100,000 $'},
+        {'code': '<3LEEPUNGG', 'desc': 'Free 2x EXP for 30 minutes'},
+        {'code': 'WELCOMETOKINGLEGACY', 'desc': 'Free 2x EXP for 30 minutes'},
+        {'code': 'SKGames', 'desc': 'Free 2x EXP for 30 minutes (Sea King Games group)'},
+        {'code': 'FREESTATSRESET', 'desc': 'Free Refund Stats'},
+        {'code': '2MFAV', 'desc': 'Free Refund Stats'},
     ],
     'astd': [
-        {'code': 'ASTDX2026', 'desc': '500 Gems'},
-        {'code': 'NEWYEAR2026', 'desc': '300 Gems + 100 Gold'},
+        {'code': 'tboicats', 'desc': 'Stardust 170, Gems 3000'},
+        {'code': 'sorryfordelayandmonkeyking', 'desc': 'Stardust 280, Gems 4000'},
+        {'code': 'yickadee', 'desc': 'Stardust 230, Gems 2000'},
     ],
 }
 
@@ -102,35 +108,40 @@ bot.set_my_commands([
 def time_ago(ts):
     diff = time.time() - ts
     if diff < 60:
-        return "🕐 только что"
+        return "только что"
     elif diff < 3600:
-        return f"⏱️ {int(diff//60)} мин назад"
+        return f"{int(diff//60)} мин назад"
     elif diff < 86400:
-        return f"🕒 {int(diff//3600)} ч назад"
+        return f"{int(diff//3600)} ч назад"
     else:
-        return f"📅 {int(diff//86400)} д назад"
+        return f"{int(diff//86400)} д назад"
 
 def make_header(emoji, title, subtitle=""):
     lines = [f"<b>{emoji} {title}</b>"]
     if subtitle:
         lines.append(f"<i>{subtitle}</i>")
     lines.append("")
-    return "\n".join(lines)
+    return "
+".join(lines)
 
 def make_footer(source_name, is_live=True):
     if is_live:
         return (
-            "\n<i>💡 Данные актуальны на момент запроса.\n"
+            "
+<i>💡 Данные актуальны на момент запроса.
+"
             "Просроченные коды отфильтрованы автоматически.</i>"
         )
     else:
         return (
-            "\n<i>⚠️ Показана резервная база — коды могут быть просрочены.\n"
+            "
+<i>⚠️ Показана резервная база — коды могут быть просрочены.
+"
             "Проверьте актуальность в игре.</i>"
         )
 
 def extract_codes(text):
-    pattern = r'\b([A-Z][A-Z0-9_]{3,19})\b'
+    pattern = r'([A-Z][A-Z0-9_]{3,19})'
     found = re.findall(pattern, text)
     blacklist = {
         'HTTP', 'HTTPS', 'HTML', 'URL', 'API', 'JSON', 'CSS', 'CS2', 'DOTA2', 'DOTA',
@@ -177,6 +188,7 @@ def extract_codes(text):
 # =============================================================
 
 def parse_fandom_genshin(wikitext_clean):
+    """Парсит Genshin Impact из Fandom Wiki."""
     active_match = re.search(
         r'==\s*Active Codes\s*==(.*?)(?===\s*Expired Codes\s*==|===|$)',
         wikitext_clean, re.DOTALL
@@ -252,6 +264,7 @@ def parse_fandom_genshin(wikitext_clean):
     return collected if collected else None
 
 def parse_fandom_bloxfruits(wikitext_clean):
+    """Парсит Blox Fruits из Fandom Wiki."""
     working_start = wikitext_clean.find('Working Codes')
     expired_start = wikitext_clean.find('Expired Codes')
 
@@ -261,7 +274,8 @@ def parse_fandom_bloxfruits(wikitext_clean):
         expired_start = len(wikitext_clean)
 
     working_section = wikitext_clean[working_start:expired_start]
-    lines = working_section.split('\n')
+    lines = working_section.split('
+')
 
     collected = []
     seen_codes = set()
@@ -281,7 +295,7 @@ def parse_fandom_bloxfruits(wikitext_clean):
                 if next_line.startswith('|'):
                     reward = next_line[1:].strip()
                     reward = re.sub(r'\{\{[^}]+\}\}', '', reward)
-                    reward = re.sub(r'\[\[[^\]]+\|([^\]]+)\]\]', r'\1', reward)
+                    reward = re.sub(r'\[\[[^\]]+\|([^\]]+)\]\]', r'', reward)
                     reward = re.sub(r'\s+', ' ', reward).strip()
                     break
 
@@ -301,79 +315,162 @@ def parse_fandom_bloxfruits(wikitext_clean):
 
     return collected if collected else None
 
-def parse_fandom_generic(wikitext_clean, game_key):
-    working_patterns = [
-        r'==\s*Working Codes\s*==(.*?)(?===\s*Expired Codes\s*==|===|$)',
-        r'==\s*Active Codes\s*==(.*?)(?===\s*Expired Codes\s*==|===|$)',
-        r'==\s*Codes\s*==(.*?)(?===|$)',
-    ]
+def parse_fandom_kinglegacy(wikitext_clean):
+    """Парсит King Legacy из Fandom Wiki (plain text формат)."""
+    # Ищем секцию Active Codes
+    active_match = re.search(
+        r'Active Codes:\s*
++(.*?)(?=
 
-    working_section = None
-    for pat in working_patterns:
-        match = re.search(pat, wikitext_clean, re.DOTALL | re.IGNORECASE)
-        if match:
-            working_section = match.group(1)
-            break
+|
+[A-Z]|\[\[Category|$)',
+        wikitext_clean, re.DOTALL
+    )
+    if not active_match:
+        # Пробуем без двоеточия
+        active_match = re.search(
+            r'Active Codes\s*
++(.*?)(?=
 
-    if not working_section:
-        code_tags = re.findall(r'<code>([^<]+)</code>', wikitext_clean)
-        if code_tags:
-            collected = []
-            seen = set()
-            for c in code_tags[:30]:
-                c = c.strip().upper()
-                if len(c) >= 4 and len(c) <= 20 and re.match(r'^[A-Z0-9_]+$', c) and c not in seen:
-                    seen.add(c)
-                    collected.append({'code': c, 'desc': 'из Fandom Wiki'})
-            return collected if collected else None
+|
+[A-Z]|\[\[Category|$)',
+            wikitext_clean, re.DOTALL
+        )
+
+    if not active_match:
         return None
 
-    lines = working_section.split('\n')
+    section = active_match.group(1)
+    lines = section.strip().split('
+')
+
     collected = []
     seen_codes = set()
 
-    for i, line in enumerate(lines):
-        code_match = re.search(r'\|\s*<code>([^<]+)</code>', line)
-        if not code_match:
-            code_match = re.search(r"\|\s*'''([^']+)'''", line)
-        if not code_match:
-            code_match = re.search(r'\|\s*([A-Z][A-Z0-9_]{3,19})\s*\|', line)
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
 
-        if code_match:
-            code = code_match.group(1).strip().upper()
+        # Формат: Code - description или Code — description
+        match = re.match(r'^([A-Za-z0-9_<]{3,25})\s*[-—]\s*(.+)$', line)
+        if match:
+            code = match.group(1).strip()
+            desc = match.group(2).strip()
 
-            reward = ""
-            for j in range(i+1, min(i+5, len(lines))):
-                next_line = lines[j].strip()
-                if next_line.startswith('|-') or next_line.startswith('!') or next_line.startswith('|}'):
-                    break
-                if '<code>' in next_line:
-                    break
-                if next_line.startswith('|'):
-                    reward = next_line[1:].strip()
-                    reward = re.sub(r'\{\{[^}]+\}\}', '', reward)
-                    reward = re.sub(r'\[\[[^\]]+\|([^\]]+)\]\]', r'\1', reward)
-                    reward = re.sub(r"'''", '', reward)
-                    reward = re.sub(r'\s+', ' ', reward).strip()
-                    break
+            # Очищаем от wiki-разметки
+            code = re.sub(r'<[^>]+>', '', code)
+            desc = re.sub(r'<[^>]+>', '', desc)
+            desc = re.sub(r'\[\[([^\]|]+)\|([^\]]+)\]\]', r'', desc)
+            desc = re.sub(r'\[\[([^\]]+)\]\]', r'', desc)
+            desc = re.sub(r'\{\{[^}]+\}\}', '', desc)
+            desc = re.sub(r'\s+', ' ', desc).strip()
 
-            if len(code) < 4 or len(code) > 25:
+            if len(code) < 3 or len(code) > 25:
                 continue
-            if not re.match(r'^[A-Z0-9_]+$', code):
+            if not re.match(r'^[A-Za-z0-9_]+$', code):
                 continue
-            if code in seen_codes:
+            if code.upper() in seen_codes:
                 continue
-            seen_codes.add(code)
+            seen_codes.add(code.upper())
 
-            desc = reward if reward else "из Fandom Wiki"
             if len(desc) > 150:
                 desc = desc[:147] + '...'
 
             collected.append({'code': code, 'desc': desc})
+
+    return collected if collected else None
+
+def parse_fandom_astd(wikitext_clean):
+    """Парсит ASTD из Fandom Wiki (tabber + article-table формат)."""
+    # Ищем Working Codes внутри <tabber>
+    working_match = re.search(
+        r'Working Codes:?\s*=\s*
+*\{\|.*?
+(.*?)
+\|-\|
+',
+        wikitext_clean, re.DOTALL
+    )
+    if not working_match:
+        # Пробуем другой паттерн
+        working_match = re.search(
+            r'Working Codes:?\s*=\s*
+*\{\|class="article-table".*?(.*?)
+\|-\|
+',
+            wikitext_clean, re.DOTALL
+        )
+
+    if not working_match:
+        # Ищем любую таблицу с ! Code !! Reward !! Date
+        working_match = re.search(
+            r'!\s*Code\s*!!\s*Reward\s*!!\s*Date\s*
+\|-
+(.*?)
+\|-\|
+',
+            wikitext_clean, re.DOTALL
+        )
+
+    if not working_match:
+        return None
+
+    section = working_match.group(1)
+    lines = section.split('
+|-')
+
+    collected = []
+    seen_codes = set()
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+
+        # Ищем строки таблицы: |<p style="color:Tomato;">code||{{Stardust|170}}, {{Gems|3000}}||23.06.2026
+        # или просто | code || reward || date
+        cells = re.findall(r'\|\s*([^|]*(?:\{\{[^}]+\}\}[^|]*)*)', line)
+        if len(cells) >= 3:
+            code = cells[0].strip()
+            reward = cells[1].strip()
+            date = cells[2].strip()
+        elif len(cells) >= 2:
+            code = cells[0].strip()
+            reward = cells[1].strip()
+            date = ""
+        else:
+            continue
+
+        # Очищаем код
+        code = re.sub(r'<[^>]+>', '', code)
+        code = re.sub(r'\s+', '', code)
+
+        if len(code) < 3 or len(code) > 30:
+            continue
+        if not re.match(r'^[A-Za-z0-9_]+$', code):
+            continue
+        if code.upper() in seen_codes:
+            continue
+        seen_codes.add(code.upper())
+
+        # Очищаем reward
+        reward = re.sub(r'\{\{([^|]+)\|([^}]+)\}\}', r' ', reward)
+        reward = re.sub(r'\[\[[^\]]+\|([^\]]+)\]\]', r'', reward)
+        reward = re.sub(r'\s+', ' ', reward).strip()
+
+        desc = reward if reward else "из Fandom Wiki"
+        if date:
+            desc += f" | 📆 {date}"
+        if len(desc) > 150:
+            desc = desc[:147] + '...'
+
+        collected.append({'code': code, 'desc': desc})
 
     return collected if collected else None
 
 def parse_fandom_api(game_key):
+    """Главный парсер Fandom Wiki."""
     try:
         url = FANDOM_API.get(game_key)
         if not url:
@@ -400,8 +497,12 @@ def parse_fandom_api(game_key):
             codes = parse_fandom_genshin(wikitext_clean)
         elif game_key == 'bloxfruits':
             codes = parse_fandom_bloxfruits(wikitext_clean)
+        elif game_key == 'kinglegacy':
+            codes = parse_fandom_kinglegacy(wikitext_clean)
+        elif game_key == 'astd':
+            codes = parse_fandom_astd(wikitext_clean)
         else:
-            codes = parse_fandom_generic(wikitext_clean, game_key)
+            codes = None
 
         if codes:
             return {
@@ -416,6 +517,7 @@ def parse_fandom_api(game_key):
         return None
 
 def parse_reddit(urls, game_key, max_age_sec):
+    """Парсит Reddit как fallback."""
     all_codes = []
     seen_codes = set()
 
@@ -442,7 +544,8 @@ def parse_reddit(urls, game_key, max_age_sec):
                 if now - created > max_age_sec:
                     continue
 
-                all_text = title + '\n' + body
+                all_text = title + '
+' + body
                 codes = extract_codes(all_text)
 
                 for code in codes:
@@ -452,7 +555,9 @@ def parse_reddit(urls, game_key, max_age_sec):
                     seen_codes.add(code)
 
                     desc = ""
-                    lines = all_text.replace('\r', '\n').split('\n')
+                    lines = all_text.replace('', '
+').split('
+')
                     for line in lines:
                         if code in line.upper():
                             clean = re.sub(r'[*#`\[\]()]', '', line).strip()
@@ -487,6 +592,7 @@ def parse_reddit(urls, game_key, max_age_sec):
     return None
 
 def parse_steam_deals():
+    """Парсит скидки Steam через CheapShark API."""
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -541,6 +647,7 @@ def parse_steam_deals():
 # =============================================================
 
 def get_game_codes(game_key):
+    """Получает коды для игры: Fandom -> Reddit -> Backup."""
     now = time.time()
     cache_key = f"{game_key}_final"
 
@@ -552,6 +659,7 @@ def get_game_codes(game_key):
     result = None
     source = None
 
+    # 1. Fandom Wiki
     print(f"[GET] {game_key}: Fandom Wiki...")
     result = parse_fandom_api(game_key)
     if result and len(result['codes']) <= 100:
@@ -561,6 +669,7 @@ def get_game_codes(game_key):
         print(f"[GET] {game_key}: Подозрительно много кодов ({len(result['codes'])}), скипаем")
         result = None
 
+    # 2. Reddit fallback
     if not result and game_key in REDDIT_SOURCES:
         print(f"[GET] {game_key}: Reddit fallback...")
         result = parse_reddit(REDDIT_SOURCES[game_key], game_key, MAX_AGE_REDDIT)
@@ -568,6 +677,7 @@ def get_game_codes(game_key):
             source = 'reddit'
             print(f"[GET] {game_key}: Reddit OK, {len(result['codes'])} кодов")
 
+    # 3. Backup fallback
     if not result:
         print(f"[GET] {game_key}: Backup fallback")
         backup = BACKUP_CODES.get(game_key, [])
@@ -588,6 +698,7 @@ def get_game_codes(game_key):
     return None, None, False
 
 def get_steam_deals():
+    """Получает скидки Steam: API -> Backup."""
     now = time.time()
     cache_key = "steam_final"
 
@@ -620,18 +731,34 @@ def get_steam_deals():
 @bot.message_handler(commands=['start'])
 def cmd_start(message):
     text = (
-        "<b>🤖 Tirk Systems v5.0 — Полный бак</b>\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "<b>🎮 Игровые промокоды:</b>\n"
-        "  /genshin — Genshin Impact\n"
-        "  /roblox — Blox Fruits\n"
-        "  /kinglegacy — King Legacy\n"
-        "  /astd — All Star Tower Defense\n\n"
-        "<b>🛒 Игровые скидки:</b>\n"
-        "  /steam — Горячие скидки Steam\n\n"
-        "<b>📊 Система:</b>\n"
-        "  /status — Статус и источники\n\n"
-        "<i>💡 Все данные берутся из Fandom Wiki и проверяются на актуальность.\n"
+        "<b>🤖 Tirk Systems v5.1 — Полный бак</b>
+"
+        "━━━━━━━━━━━━━━━━━━━━━━
+
+"
+        "<b>🎮 Игровые промокоды:</b>
+"
+        "  /genshin — Genshin Impact
+"
+        "  /roblox — Blox Fruits
+"
+        "  /kinglegacy — King Legacy
+"
+        "  /astd — All Star Tower Defense
+
+"
+        "<b>🛒 Игровые скидки:</b>
+"
+        "  /steam — Горячие скидки Steam
+
+"
+        "<b>📊 Система:</b>
+"
+        "  /status — Статус и источники
+
+"
+        "<i>💡 Все данные берутся из Fandom Wiki и проверяются на актуальность.
+"
         "Просроченные коды отфильтрованы автоматически.</i>"
     )
     bot.send_message(message.chat.id, text)
@@ -647,7 +774,8 @@ def cmd_genshin(message):
 
     text = make_header("🎮", "Genshin Impact", data['freshness'])
     for item in data['codes']:
-        text += f"• <code>{item['code']}</code> — {item['desc']}\n"
+        text += f"• <code>{item['code']}</code> — {item['desc']}
+"
     text += make_footer(source, is_live)
 
     bot.send_message(message.chat.id, text, disable_web_page_preview=True)
@@ -663,7 +791,8 @@ def cmd_roblox(message):
 
     text = make_header("🍎", "Blox Fruits", data['freshness'])
     for item in data['codes']:
-        text += f"• <code>{item['code']}</code> — {item['desc']}\n"
+        text += f"• <code>{item['code']}</code> — {item['desc']}
+"
     text += make_footer(source, is_live)
 
     bot.send_message(message.chat.id, text, disable_web_page_preview=True)
@@ -679,7 +808,8 @@ def cmd_kinglegacy(message):
 
     text = make_header("👑", "King Legacy", data['freshness'])
     for item in data['codes']:
-        text += f"• <code>{item['code']}</code> — {item['desc']}\n"
+        text += f"• <code>{item['code']}</code> — {item['desc']}
+"
     text += make_footer(source, is_live)
 
     bot.send_message(message.chat.id, text, disable_web_page_preview=True)
@@ -695,7 +825,8 @@ def cmd_astd(message):
 
     text = make_header("⭐", "All Star Tower Defense", data['freshness'])
     for item in data['codes']:
-        text += f"• <code>{item['code']}</code> — {item['desc']}\n"
+        text += f"• <code>{item['code']}</code> — {item['desc']}
+"
     text += make_footer(source, is_live)
 
     bot.send_message(message.chat.id, text, disable_web_page_preview=True)
@@ -713,22 +844,28 @@ def cmd_steam(message):
 
     for deal in data['deals'][:10]:
         old = f" {deal['old_price']}" if deal.get('old_price') else ''
-        text += f"🎮 <b>{deal['title']}</b>\n"
-        text += f"   💰 {deal['price']}{old} 🔥 <b>{deal['discount']}</b>\n"
+        text += f"🎮 <b>{deal['title']}</b>
+"
+        text += f"   💰 {deal['price']}{old} 🔥 <b>{deal['discount']}</b>
+"
         if deal.get('url'):
-            text += f"   🔗 <a href='{deal['url']}'>Купить</a>\n"
-        text += "\n"
+            text += f"   🔗 <a href='{deal['url']}'>Купить</a>
+"
+        text += "
+"
 
     if not is_live:
-        text += "\n<i>⚠️ Показана резервная база — проверьте актуальность цен.</i>"
+        text += "
+<i>⚠️ Показана резервная база — проверьте актуальность цен.</i>"
     else:
-        text += "\n<i>💡 Данные с CheapShark API в реальном времени.</i>"
+        text += "
+<i>💡 Данные с CheapShark API в реальном времени.</i>"
 
     bot.send_message(message.chat.id, text, disable_web_page_preview=True)
 
 @bot.message_handler(commands=['status'])
 def cmd_status(message):
-    lines = ["<b>📊 Tirk Systems v5.0 — Статус</b>", "━━━━━━━━━━━━━━━━━━━━━━", ""]
+    lines = ["<b>📊 Tirk Systems v5.1 — Статус</b>", "━━━━━━━━━━━━━━━━━━━━━━", ""]
 
     games = [
         ('genshin', '🎮 Genshin Impact'),
@@ -760,7 +897,8 @@ def cmd_status(message):
     lines.append("")
     lines.append(f"<i>⏱️ Кэш обновляется каждые {CACHE_TTL//60} минут</i>")
 
-    bot.send_message(message.chat.id, "\n".join(lines))
+    bot.send_message(message.chat.id, "
+".join(lines))
 
 # =============================================================
 # 9. FLASK WEB-SERVER (для Render)
@@ -770,11 +908,11 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Tirk Systems v5.0 is online!"
+    return "Tirk Systems v5.1 is online!"
 
 @app.route('/health')
 def health():
-    return {"status": "ok", "version": "5.0", "timestamp": time.time()}
+    return {"status": "ok", "version": "5.1", "timestamp": time.time()}
 
 def run_flask():
     app.run(host='0.0.0.0', port=PORT)
@@ -785,7 +923,7 @@ def run_flask():
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("🚀 Tirk Systems v5.0 — Полный бак")
+    print("🚀 Tirk Systems v5.1 — Полный бак")
     print("=" * 60)
     print(f"📡 Flask-сервер: http://0.0.0.0:{PORT}")
     print(f"🤖 Telegram-бот: инициализация...")
