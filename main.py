@@ -2,301 +2,802 @@ import os
 import re
 import time
 import datetime
+import threading
 import telebot
 import requests
-from threading import Thread
 from flask import Flask
 
-# ============ МИКРО-ВЕБ-СЕРВЕР ДЛЯ RENDER ============
-app = Flask('')
+# =============================================================
+# TIRK SYSTEMS v5.0 -- Полный бак
+# =============================================================
 
-@app.route('/')
-def home():
-    return "Tirk Systems v4.1 is running 24/7!"
+# ============ 1. КОНФИГУРАЦИЯ И ОКРУЖЕНИЕ ============
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+if not BOT_TOKEN:
+    print("[FATAL] Переменная окружения BOT_TOKEN не найдена!")
+    print("[FATAL] Установи BOT_TOKEN в настройках Render и перезапусти.")
+    exit(1)
 
-def run_web_server():
-    # Рендер сам выдает порт в переменные окружения, обычно это 10000
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
-
-# ============ НАСТРОЙКИ БОТА ============
+PORT = int(os.environ.get("PORT", 10000))
 CACHE = {}
 CACHE_TTL = 600  # 10 минут
 
+# =============================================================
+# 2. ИСТОЧНИКИ ДАННЫХ
+# =============================================================
+
+# Fandom Wiki API
 FANDOM_API = {
     'genshin': 'https://genshin-impact.fandom.com/api.php?action=parse&page=Promotional_Code&prop=wikitext&format=json',
-    'roblox': 'https://blox-fruits.fandom.com/api.php?action=parse&page=Codes&prop=wikitext&format=json'
+    'bloxfruits': 'https://blox-fruits.fandom.com/api.php?action=parse&page=Codes&prop=wikitext&format=json',
+    'kinglegacy': 'https://king-legacy.fandom.com/api.php?action=parse&page=Codes&prop=wikitext&format=json',
+    'astd': 'https://all-star-tower-defense.fandom.com/api.php?action=parse&page=Codes&prop=wikitext&format=json',
 }
 
+# Reddit fallback
 REDDIT_SOURCES = {
     'genshin': [
         'https://www.reddit.com/r/Genshin_Impact/new.json?limit=30',
         'https://www.reddit.com/r/GenshinImpactCodes/new.json?limit=20',
     ],
-    'roblox': [
-        'https://www.reddit.com/r/bloxfruits/new.json?limit=20',
-    ]
+    'bloxfruits': ['https://www.reddit.com/r/bloxfruits/new.json?limit=20'],
+    'kinglegacy': ['https://www.reddit.com/r/KingLegacy/new.json?limit=20'],
+    'astd': ['https://www.reddit.com/r/AllStarTowerDefense/new.json?limit=20'],
 }
 MAX_AGE_REDDIT = 30 * 86400
 
+# Steam deals (CheapShark API)
+STEAM_API = 'https://www.cheapshark.com/api/1.0/deals?storeID=1&onSale=1&pageSize=15'
+
+# =============================================================
+# 3. РЕЗЕРВНЫЕ БАЗЫ
+# =============================================================
+
 BACKUP_CODES = {
-    'genshin': (
-        "🤖 <b>Genshin Impact</b>\n"
-        "<i>⚠️ Ни один источник не ответил. Вот резервная база:</i>\n\n"
-        "• <b>GENSHINGIFT</b> — 50 примогемов\n"
-        "• <b>9A9239SLUX7A</b> — 60 примогемов"
-    ),
-    'roblox': (
-        "🤖 <b>Blox Fruits</b>\n"
-        "<i>⚠️ Ни один источник не ответил. Вот резервная база:</i>\n\n"
-        "• <b>REWARD_FUN</b> — 2x опыт\n"
-        "• <b>ADMIN_STRENGTH</b> — 2x опыт"
-    )
+    'genshin': [
+        {'code': 'GENSHINGIFT', 'desc': '50 примогемов, 3 опыта героя'},
+        {'code': '9A9239SLUX7A', 'desc': '60 примогемов'},
+    ],
+    'bloxfruits': [
+        {'code': 'REWARD_FUN', 'desc': '2x опыт'},
+        {'code': 'ADMIN_STRENGTH', 'desc': '2x опыт'},
+    ],
+    'kinglegacy': [
+        {'code': 'UPDATE4', 'desc': '3x Gems'},
+        {'code': '1MVISITS', 'desc': '5x Gems'},
+    ],
+    'astd': [
+        {'code': 'ASTDX2026', 'desc': '500 Gems'},
+        {'code': 'NEWYEAR2026', 'desc': '300 Gems + 100 Gold'},
+    ],
 }
 
-# Брем токен из скрытых настроек сервера (Environment Variables)
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
+STEAM_BACKUP = [
+    {'title': 'Counter-Strike 2', 'price': 'Free', 'discount': '100%', 'store': 'Steam'},
+    {'title': 'Dota 2', 'price': 'Free', 'discount': '100%', 'store': 'Steam'},
+    {'title': 'Apex Legends', 'price': 'Free', 'discount': '100%', 'store': 'Steam'},
+]
 
-if not BOT_TOKEN:
-    print("❌ ОШИБКА: Переменная BOT_TOKEN не найдена в настройках сервера!")
-    exit(1)
+# =============================================================
+# 4. ИНИЦИАЛИЗАЦИЯ БОТА
+# =============================================================
 
-bot = telebot.TeleBot(BOT_TOKEN)
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode='HTML')
 
-# ============ УТИЛИТЫ ============
+# Регистрация команд в меню Telegram
+bot.set_my_commands([
+    telebot.types.BotCommand('start', 'Запустить бота'),
+    telebot.types.BotCommand('genshin', 'Коды Genshin Impact'),
+    telebot.types.BotCommand('roblox', 'Коды Blox Fruits'),
+    telebot.types.BotCommand('kinglegacy', 'Коды King Legacy'),
+    telebot.types.BotCommand('astd', 'Коды All Star Tower Defense'),
+    telebot.types.BotCommand('steam', 'Скидки Steam'),
+    telebot.types.BotCommand('status', 'Статус бота'),
+])
+
+# =============================================================
+# 5. УТИЛИТЫ И СТИЛИЗАЦИЯ
+# =============================================================
+
 def time_ago(ts):
     diff = time.time() - ts
-    if diff < 60: return "только что"
-    elif diff < 3600: return f"{int(diff//60)} мин назад"
-    elif diff < 86400: return f"{int(diff//3600)} ч назад"
-    else: return f"{int(diff//86400)} д назад"
+    if diff < 60:
+        return "🕐 только что"
+    elif diff < 3600:
+        return f"⏱️ {int(diff//60)} мин назад"
+    elif diff < 86400:
+        return f"🕒 {int(diff//3600)} ч назад"
+    else:
+        return f"📅 {int(diff//86400)} д назад"
+
+def make_header(emoji, title, subtitle=""):
+    lines = [f"<b>{emoji} {title}</b>"]
+    if subtitle:
+        lines.append(f"<i>{subtitle}</i>")
+    lines.append("")
+    return "\n".join(lines)
+
+def make_footer(source_name, is_live=True):
+    if is_live:
+        return (
+            "\n<i>💡 Данные актуальны на момент запроса.\n"
+            "Просроченные коды отфильтрованы автоматически.</i>"
+        )
+    else:
+        return (
+            "\n<i>⚠️ Показана резервная база — коды могут быть просрочены.\n"
+            "Проверьте актуальность в игре.</i>"
+        )
 
 def extract_codes(text):
     pattern = r'\b([A-Z][A-Z0-9_]{3,19})\b'
     found = re.findall(pattern, text)
-    blacklist = {'HTTP', 'HTTPS', 'HTML', 'URL', 'API', 'JSON', 'CSS', 'CS2', 'DOTA2', 'DOTA',
-                 'MT', 'WWW', 'IMG', 'PNG', 'JPG', 'GIF', 'PDF', 'ZIP', 'EXE', 'DLL', 'FAQ',
-                 'TOS', 'GDPR', 'USA', 'UK', 'EU', 'CN', 'JP', 'KR', 'RU', 'UTC', 'SERVER',
-                 'ASIA', 'AMERICA', 'EUROPE', 'CHINA', 'TW', 'HK', 'MACAO', 'PRIMOGEM',
-                 'MORA', 'HERO', 'WIT', 'EXP', 'ORE', 'RECIPE', 'MAIL', 'CODE', 'CODES',
-                 'REDEEM', 'VALID', 'INFINITE', 'INDEFINITE', 'DISCOVERED', 'EXPIRED',
-                 'NOTES', 'FROM', 'UNTIL', 'MAX', 'USAGE', 'LIMIT', 'REVOKED', 'ALREADY',
-                 'CLAIMED', 'CONFIRM', 'INVALID', 'INPUT', 'SPACE', 'CHARACTER', 'BEGINNING',
-                 'END', 'CAUSE', 'BECOME', 'PLAYER', 'ADVENTURE', 'RANK', 'EXCEPTION',
-                 'PRIME', 'GAMING', 'OFFER', 'EARLIEST', 'ABLE', 'CLAIM', 'REWARD',
-                 'MAILBOX', 'DELIVERY', 'STANDARD', 'FOLLOWING', 'UNIQUE', 'SURPRISE',
-                 'NICOLE', 'LITTLE', 'HOYOLAB', 'ARTICLE', 'ADDITIONALLY', 'PLEASE',
-                 'AWARE', 'CONDITIONS', 'CELEBRATORY', 'MILESTONE', 'SIMILAR', 'ACTIVITY',
-                 'OCCASIONALLY', 'RELEASED', 'HOYOVERSE', 'SOCIAL', 'MEDIA', 'EVENT',
-                 'LIVE', 'STREAM', 'SETTING', 'MENU', 'ACCOUNT', 'ONLINE', 'OFFICIAL',
-                 'PAGE', 'GLOBAL', 'ONLY', 'CURRENT', 'REDEEMABLE', 'EARLY', 'SENT',
-                 'TELLING', 'STILL', 'INPUTTING', 'CHARACTERS', 'WILL', 'ALSO', 'NOTE',
-                 'DOES', 'NOT', 'MEAN', 'CAN', 'HITS', 'DECIDES', 'REVOKE', 'ALL',
-                 'TIMES', 'LISTED', 'BELOW', 'ARE', 'ACCORDING', 'SIGN', 'EDIT',
-                 'REFERENCES', 'NOTACODE', 'YES', 'NO', 'SECOND', 'SEA', 'FIRST',
-                 'TITLE', 'GIVEN', 'WHEN', 'ENTERS', 'BUT', 'ITSELF', 'REDEEMED'}
+    blacklist = {
+        'HTTP', 'HTTPS', 'HTML', 'URL', 'API', 'JSON', 'CSS', 'CS2', 'DOTA2', 'DOTA',
+        'MT', 'WWW', 'IMG', 'PNG', 'JPG', 'GIF', 'PDF', 'ZIP', 'EXE', 'DLL', 'FAQ',
+        'TOS', 'GDPR', 'USA', 'UK', 'EU', 'CN', 'JP', 'KR', 'RU', 'UTC', 'SERVER',
+        'ASIA', 'AMERICA', 'EUROPE', 'CHINA', 'TW', 'HK', 'MACAO', 'PRIMOGEM',
+        'MORA', 'HERO', 'WIT', 'EXP', 'ORE', 'RECIPE', 'MAIL', 'CODE', 'CODES',
+        'REDEEM', 'VALID', 'INFINITE', 'INDEFINITE', 'DISCOVERED', 'EXPIRED',
+        'NOTES', 'FROM', 'UNTIL', 'MAX', 'USAGE', 'LIMIT', 'REVOKED', 'ALREADY',
+        'CLAIMED', 'CONFIRM', 'INVALID', 'INPUT', 'SPACE', 'CHARACTER', 'BEGINNING',
+        'END', 'CAUSE', 'BECOME', 'PLAYER', 'ADVENTURE', 'RANK', 'EXCEPTION',
+        'PRIME', 'GAMING', 'OFFER', 'EARLIEST', 'ABLE', 'CLAIM', 'REWARD',
+        'MAILBOX', 'DELIVERY', 'STANDARD', 'FOLLOWING', 'UNIQUE', 'SURPRISE',
+        'NICOLE', 'LITTLE', 'HOYOLAB', 'ARTICLE', 'ADDITIONALLY', 'PLEASE',
+        'AWARE', 'CONDITIONS', 'CELEBRATORY', 'MILESTONE', 'SIMILAR', 'ACTIVITY',
+        'OCCASIONALLY', 'RELEASED', 'HOYOVERSE', 'SOCIAL', 'MEDIA', 'EVENT',
+        'LIVE', 'STREAM', 'SETTING', 'MENU', 'ACCOUNT', 'ONLINE', 'OFFICIAL',
+        'PAGE', 'GLOBAL', 'ONLY', 'CURRENT', 'REDEEMABLE', 'EARLY', 'SENT',
+        'TELLING', 'STILL', 'INPUTTING', 'CHARACTERS', 'WILL', 'ALSO', 'NOTE',
+        'DOES', 'NOT', 'MEAN', 'CAN', 'HITS', 'DECIDES', 'REVOKE', 'ALL',
+        'TIMES', 'LISTED', 'BELOW', 'ARE', 'ACCORDING', 'SIGN', 'EDIT',
+        'REFERENCES', 'NOTACODE', 'YES', 'NO', 'SECOND', 'SEA', 'FIRST',
+        'TITLE', 'GIVEN', 'WHEN', 'ENTERS', 'BUT', 'ITSELF', 'REDEEMED',
+        'UPDATE', 'VISITS', 'GEMS', 'GOLD', 'RESET', 'STAT', 'FREE',
+        'MINUTES', 'HOURS', 'DAYS', 'MONTHS', 'YEARS', 'NEW', 'OLD',
+        'BIG', 'SMALL', 'FAST', 'SLOW', 'EASY', 'HARD', 'GOOD', 'BAD',
+        'ON', 'OFF', 'UP', 'DOWN', 'LEFT', 'RIGHT',
+        'TOP', 'BOTTOM', 'FRONT', 'BACK', 'NEXT', 'PREV', 'LAST',
+        'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX',
+        'SEVEN', 'EIGHT', 'NINE', 'TEN', 'HUNDRED', 'THOUSAND',
+    }
     results = []
     for code in found:
-        if code in blacklist: continue
+        if code in blacklist:
+            continue
         if not re.search(r'\d', code):
-            if code not in ('GENSHINGIFT',): continue
+            if code not in ('GENSHINGIFT',):
+                continue
         results.append(code)
     return list(dict.fromkeys(results))
 
-# ============ FANDOM WIKI API ПАРСЕР ============
+# =============================================================
+# 6. ПАРСЕРЫ ИСТОЧНИКОВ
+# =============================================================
+
+def parse_fandom_genshin(wikitext_clean):
+    active_match = re.search(
+        r'==\s*Active Codes\s*==(.*?)(?===\s*Expired Codes\s*==|===|$)',
+        wikitext_clean, re.DOTALL
+    )
+    if not active_match:
+        return None
+
+    active_section = active_match.group(1)
+    code_blocks = re.findall(
+        r'\{\{Code Row\s*\|(.*?)(?:\}\}|\|notacode=yes)', active_section, re.DOTALL
+    )
+
+    collected = []
+    seen_codes = set()
+
+    for block in code_blocks:
+        parts = [p.strip() for p in block.split('|')]
+        if len(parts) < 5:
+            continue
+
+        code = parts[0].upper()
+        server = parts[1]
+        rewards = parts[2]
+        discovery = parts[3]
+        expiry = parts[4]
+
+        is_expired = False
+        if expiry and expiry.lower() not in ('unknown', 'indefinite', 'n/a', ''):
+            try:
+                expiry_date = datetime.datetime.strptime(expiry, '%Y-%m-%d')
+                if expiry_date < datetime.datetime.now():
+                    is_expired = True
+            except:
+                pass
+
+        if len(code) < 4 or len(code) > 20:
+            continue
+        if not re.match(r'^[A-Z0-9_]+$', code):
+            continue
+        if code in seen_codes:
+            continue
+        seen_codes.add(code)
+
+        desc_parts = []
+        if rewards:
+            clean_rewards = rewards.replace('*', ' ').replace(';', ', ')
+            clean_rewards = re.sub(r'\{\{[^}]+\}\}', '', clean_rewards)
+            clean_rewards = re.sub(r'\s+', ' ', clean_rewards).strip()
+            if clean_rewards:
+                desc_parts.append(clean_rewards)
+
+        if server:
+            server_map = {
+                'G': '🌍 Global', 'A': '🌍 All', 'NA': '🇺🇸 America',
+                'EU': '🇪🇺 Europe', 'SEA': '🇨🇳 Asia', 'CN': '🇨🇳 China',
+                'SAR': '🇭🇰 TW/HK/Macao'
+            }
+            srv = server_map.get(server, server)
+            desc_parts.append(srv)
+
+        if expiry and expiry.lower() not in ('unknown', 'indefinite', 'n/a', ''):
+            desc_parts.append(f"📆 до {expiry}")
+        elif expiry.lower() == 'unknown':
+            desc_parts.append("❓ срок неизвестен")
+
+        desc = " | ".join(desc_parts) if desc_parts else "из Fandom Wiki"
+        if len(desc) > 150:
+            desc = desc[:147] + '...'
+
+        if not is_expired:
+            collected.append({'code': code, 'desc': desc})
+
+    return collected if collected else None
+
+def parse_fandom_bloxfruits(wikitext_clean):
+    working_start = wikitext_clean.find('Working Codes')
+    expired_start = wikitext_clean.find('Expired Codes')
+
+    if working_start == -1:
+        return None
+    if expired_start == -1:
+        expired_start = len(wikitext_clean)
+
+    working_section = wikitext_clean[working_start:expired_start]
+    lines = working_section.split('\n')
+
+    collected = []
+    seen_codes = set()
+
+    for i, line in enumerate(lines):
+        code_match = re.search(r'\|\s*<code>([^<]+)</code>', line)
+        if code_match:
+            code = code_match.group(1).strip().upper()
+
+            reward = ""
+            for j in range(i+1, min(i+5, len(lines))):
+                next_line = lines[j].strip()
+                if next_line.startswith('|-') or next_line.startswith('!') or next_line.startswith('|}'):
+                    break
+                if '<code>' in next_line:
+                    break
+                if next_line.startswith('|'):
+                    reward = next_line[1:].strip()
+                    reward = re.sub(r'\{\{[^}]+\}\}', '', reward)
+                    reward = re.sub(r'\[\[[^\]]+\|([^\]]+)\]\]', r'\1', reward)
+                    reward = re.sub(r'\s+', ' ', reward).strip()
+                    break
+
+            if len(code) < 4 or len(code) > 25:
+                continue
+            if not re.match(r'^[A-Z0-9_]+$', code):
+                continue
+            if code in seen_codes:
+                continue
+            seen_codes.add(code)
+
+            desc = reward if reward else "из Fandom Wiki"
+            if len(desc) > 150:
+                desc = desc[:147] + '...'
+
+            collected.append({'code': code, 'desc': desc})
+
+    return collected if collected else None
+
+def parse_fandom_generic(wikitext_clean, game_key):
+    working_patterns = [
+        r'==\s*Working Codes\s*==(.*?)(?===\s*Expired Codes\s*==|===|$)',
+        r'==\s*Active Codes\s*==(.*?)(?===\s*Expired Codes\s*==|===|$)',
+        r'==\s*Codes\s*==(.*?)(?===|$)',
+    ]
+
+    working_section = None
+    for pat in working_patterns:
+        match = re.search(pat, wikitext_clean, re.DOTALL | re.IGNORECASE)
+        if match:
+            working_section = match.group(1)
+            break
+
+    if not working_section:
+        code_tags = re.findall(r'<code>([^<]+)</code>', wikitext_clean)
+        if code_tags:
+            collected = []
+            seen = set()
+            for c in code_tags[:30]:
+                c = c.strip().upper()
+                if len(c) >= 4 and len(c) <= 20 and re.match(r'^[A-Z0-9_]+$', c) and c not in seen:
+                    seen.add(c)
+                    collected.append({'code': c, 'desc': 'из Fandom Wiki'})
+            return collected if collected else None
+        return None
+
+    lines = working_section.split('\n')
+    collected = []
+    seen_codes = set()
+
+    for i, line in enumerate(lines):
+        code_match = re.search(r'\|\s*<code>([^<]+)</code>', line)
+        if not code_match:
+            code_match = re.search(r"\|\s*'''([^']+)'''", line)
+        if not code_match:
+            code_match = re.search(r'\|\s*([A-Z][A-Z0-9_]{3,19})\s*\|', line)
+
+        if code_match:
+            code = code_match.group(1).strip().upper()
+
+            reward = ""
+            for j in range(i+1, min(i+5, len(lines))):
+                next_line = lines[j].strip()
+                if next_line.startswith('|-') or next_line.startswith('!') or next_line.startswith('|}'):
+                    break
+                if '<code>' in next_line:
+                    break
+                if next_line.startswith('|'):
+                    reward = next_line[1:].strip()
+                    reward = re.sub(r'\{\{[^}]+\}\}', '', reward)
+                    reward = re.sub(r'\[\[[^\]]+\|([^\]]+)\]\]', r'\1', reward)
+                    reward = re.sub(r"'''", '', reward)
+                    reward = re.sub(r'\s+', ' ', reward).strip()
+                    break
+
+            if len(code) < 4 or len(code) > 25:
+                continue
+            if not re.match(r'^[A-Z0-9_]+$', code):
+                continue
+            if code in seen_codes:
+                continue
+            seen_codes.add(code)
+
+            desc = reward if reward else "из Fandom Wiki"
+            if len(desc) > 150:
+                desc = desc[:147] + '...'
+
+            collected.append({'code': code, 'desc': desc})
+
+    return collected if collected else None
+
 def parse_fandom_api(game_key):
     try:
         url = FANDOM_API.get(game_key)
-        if not url: return None
-        
+        if not url:
+            return None
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
             "Accept": "application/json",
         }
         r = requests.get(url, headers=headers, timeout=15)
-        if r.status_code != 200: return None
-        
+        if r.status_code != 200:
+            print(f"[FANDOM] {game_key} -> HTTP {r.status_code}")
+            return None
+
         data = r.json()
         wikitext = data.get('parse', {}).get('wikitext', {}).get('*', '')
-        if not wikitext: return None
-        
-        wikitext_clean = re.sub(r'<!--.*?-->', '', wikitext, flags=re.DOTALL)
-        
-        if game_key == 'genshin':
-            active_match = re.search(r'==\s*Active Codes\s*==(.*?)(?===\s*Expired Codes\s*==|===|$)', wikitext_clean, re.DOTALL)
-            if not active_match: return None
-            
-            active_section = active_match.group(1)
-            code_blocks = re.findall(r'\{\{Code Row\s*\|(.*?)(?:\}\}|\|notacode=yes)', active_section, re.DOTALL)
-            
-            collected = []
-            seen_codes = set()
-            
-            for block in code_blocks:
-                parts = [p.strip() for p in block.split('|')]
-                if len(parts) < 5: continue
-                
-                code = parts[0].upper()
-                server = parts[1]
-                rewards = parts[2]
-                expiry = parts[4]
-                
-                is_expired = False
-                if expiry and expiry.lower() not in ('unknown', 'indefinite', 'n/a', ''):
-                    try:
-                        expiry_date = datetime.datetime.strptime(expiry, '%Y-%m-%d')
-                        if expiry_date < datetime.datetime.now(): is_expired = True
-                    except: pass
-                
-                if len(code) < 4 or len(code) > 20 or not re.match(r'^[A-Z0-9_]+$', code) or code in seen_codes: continue
-                seen_codes.add(code)
-                
-                desc_parts = []
-                if rewards:
-                    clean_rewards = re.sub(r'\{\{[^}]+\}\}', '', rewards.replace('*', ' ').replace(';', ', '))
-                    clean_rewards = re.sub(r'\s+', ' ', clean_rewards).strip()
-                    if clean_rewards: desc_parts.append(clean_rewards)
-                
-                if server:
-                    server_map = {'G': 'Global', 'A': 'All', 'NA': 'America', 'EU': 'Europe', 'SEA': 'Asia'}
-                    desc_parts.append(f"[{server_map.get(server, server)}]")
-                
-                if expiry and expiry.lower() not in ('unknown', 'indefinite', 'n/a', ''): desc_parts.append(f"(до {expiry})")
-                
-                desc = " ".join(desc_parts) if desc_parts else "из Fandom Wiki"
-                if not is_expired:
-                    collected.append({'code': code, 'desc': desc, 'age': 'актуально'})
-            
-            if collected:
-                return {'codes': collected, 'source': 'Fandom Wiki', 'freshness': f"🟢 Fandom Wiki, {len(collected)} активных кодов"}
-        
-        elif game_key == 'roblox':
-            working_start = wikitext_clean.find('Working Codes')
-            expired_start = wikitext_clean.find('Expired Codes')
-            if working_start == -1: return None
-            if expired_start == -1: expired_start = len(wikitext_clean)
-            
-            working_section = wikitext_clean[working_start:expired_start]
-            lines = working_section.split('\n')
-            
-            collected = []
-            seen_codes = set()
-            
-            for i, line in enumerate(lines):
-                code_match = re.search(r'\|\s*<code>([^<]+)</code>', line)
-                if code_match:
-                    code = code_match.group(1).strip().upper()
-                    if len(code) < 4 or len(code) > 25 or not re.match(r'^[A-Z0-9_]+$', code) or code in seen_codes: continue
-                    seen_codes.add(code)
-                    
-                    reward = ""
-                    for j in range(i+1, min(i+5, len(lines))):
-                        next_line = lines[j].strip()
-                        if next_line.startswith('|-') or next_line.startswith('!') or next_line.startswith('|}') or '<code>' in next_line: break
-                        if next_line.startswith('|'):
-                            reward = re.sub(r'\{\{[^}]+\}\}', '', next_line[1:].strip())
-                            reward = re.sub(r'\[\[[^\]]+\|([^\]]+)\]\]', r'\1', reward)
-                            break
-                    
-                    desc = reward if reward else "из Fandom Wiki"
-                    collected.append({'code': code, 'desc': desc, 'age': 'актуально'})
-            
-            if collected:
-                return {'codes': collected, 'source': 'Fandom Wiki', 'freshness': f"🟢 Fandom Wiki, {len(collected)} рабочих кодов"}
-        return None
-    except: return None
+        if not wikitext:
+            print(f"[FANDOM] {game_key} -> пустой wikitext")
+            return None
 
-# ============ REDDIT ПАРСЕР ============
+        wikitext_clean = re.sub(r'<!--.*?-->', '', wikitext, flags=re.DOTALL)
+
+        if game_key == 'genshin':
+            codes = parse_fandom_genshin(wikitext_clean)
+        elif game_key == 'bloxfruits':
+            codes = parse_fandom_bloxfruits(wikitext_clean)
+        else:
+            codes = parse_fandom_generic(wikitext_clean, game_key)
+
+        if codes:
+            return {
+                'codes': codes,
+                'source': 'Fandom Wiki',
+                'freshness': f"🟢 Fandom Wiki — {len(codes)} активных кодов"
+            }
+        return None
+
+    except Exception as e:
+        print(f"[FANDOM ERROR] {game_key}: {e}")
+        return None
+
 def parse_reddit(urls, game_key, max_age_sec):
     all_codes = []
     seen_codes = set()
+
     for url in urls:
         try:
-            headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                "Accept": "application/json",
+            }
             r = requests.get(url, headers=headers, timeout=10)
-            if r.status_code != 200: continue
-            posts = r.json().get('data', {}).get('children', [])
+            if r.status_code != 200:
+                continue
+
+            data = r.json()
+            posts = data.get('data', {}).get('children', [])
             now = time.time()
-            
+
             for post in posts:
                 p = post.get('data', {})
+                title = p.get('title', '')
+                body = p.get('selftext', '')
                 created = p.get('created_utc', 0)
-                if now - created > max_age_sec: continue
-                
-                all_text = p.get('title', '') + '\n' + p.get('selftext', '')
+
+                if now - created > max_age_sec:
+                    continue
+
+                all_text = title + '\n' + body
                 codes = extract_codes(all_text)
-                
+
                 for code in codes:
                     code = code.upper().strip()
-                    if code in seen_codes: continue
+                    if code in seen_codes:
+                        continue
                     seen_codes.add(code)
-                    
-                    desc = p.get('title', '')
-                    all_codes.append({'code': code, 'desc': desc[:110], 'age': time_ago(created)})
-            if all_codes: break
-        except: continue
-    if all_codes: return {'codes': all_codes, 'source': 'Reddit', 'freshness': f"🟢 Live с Reddit, {len(all_codes)} кодов"}
+
+                    desc = ""
+                    lines = all_text.replace('\r', '\n').split('\n')
+                    for line in lines:
+                        if code in line.upper():
+                            clean = re.sub(r'[*#`\[\]()]', '', line).strip()
+                            if len(clean) > len(code) + 3:
+                                desc = clean
+                                break
+
+                    if not desc:
+                        desc = title
+                    if len(desc) > 120:
+                        desc = desc[:117] + '...'
+
+                    all_codes.append({
+                        'code': code,
+                        'desc': desc,
+                        'age': time_ago(created)
+                    })
+
+            if all_codes:
+                break
+
+        except Exception as e:
+            print(f"[REDDIT ERROR] {url}: {e}")
+            continue
+
+    if all_codes:
+        return {
+            'codes': all_codes,
+            'source': 'Reddit',
+            'freshness': f"🟠 Reddit — {len(all_codes)} кодов"
+        }
     return None
 
-def get_codes(game_key):
+def parse_steam_deals():
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+        }
+        r = requests.get(STEAM_API, headers=headers, timeout=15)
+        if r.status_code != 200:
+            print(f"[STEAM] HTTP {r.status_code}")
+            return None
+
+        deals = r.json()
+        if not deals or not isinstance(deals, list):
+            print("[STEAM] Пустой ответ")
+            return None
+
+        collected = []
+        for deal in deals[:15]:
+            title = deal.get('title', 'Unknown')
+            sale_price = deal.get('salePrice', '0')
+            normal_price = deal.get('normalPrice', '0')
+            savings = float(deal.get('savings', 0))
+            deal_id = deal.get('dealID', '')
+
+            discount = round(savings)
+            price_str = f"${sale_price}" if sale_price != '0.00' else 'Free'
+            old_price = f"~~${normal_price}~~" if normal_price != sale_price else ''
+
+            store_url = f"https://www.cheapshark.com/redirect?dealID={deal_id}" if deal_id else ''
+
+            collected.append({
+                'title': title,
+                'price': price_str,
+                'old_price': old_price,
+                'discount': f"-{discount}%",
+                'url': store_url,
+            })
+
+        if collected:
+            return {
+                'deals': collected,
+                'source': 'CheapShark',
+                'freshness': f"🔥 CheapShark — {len(collected)} горячих скидок"
+            }
+        return None
+
+    except Exception as e:
+        print(f"[STEAM ERROR] {e}")
+        return None
+
+# =============================================================
+# 7. SMART GETTER
+# =============================================================
+
+def get_game_codes(game_key):
     now = time.time()
     cache_key = f"{game_key}_final"
+
     if cache_key in CACHE:
         ts, data, src = CACHE[cache_key]
-        if now - ts < CACHE_TTL: return data, src
-    
+        if now - ts < CACHE_TTL:
+            return data, src, True
+
+    result = None
+    source = None
+
+    print(f"[GET] {game_key}: Fandom Wiki...")
     result = parse_fandom_api(game_key)
-    source = 'fandom' if result else None
-    
+    if result and len(result['codes']) <= 100:
+        source = 'fandom'
+        print(f"[GET] {game_key}: Fandom OK, {len(result['codes'])} кодов")
+    elif result and len(result['codes']) > 100:
+        print(f"[GET] {game_key}: Подозрительно много кодов ({len(result['codes'])}), скипаем")
+        result = None
+
     if not result and game_key in REDDIT_SOURCES:
+        print(f"[GET] {game_key}: Reddit fallback...")
         result = parse_reddit(REDDIT_SOURCES[game_key], game_key, MAX_AGE_REDDIT)
-        if result: source = 'reddit'
-        
+        if result:
+            source = 'reddit'
+            print(f"[GET] {game_key}: Reddit OK, {len(result['codes'])} кодов")
+
+    if not result:
+        print(f"[GET] {game_key}: Backup fallback")
+        backup = BACKUP_CODES.get(game_key, [])
+        if backup:
+            result = {
+                'codes': backup,
+                'source': 'Backup',
+                'freshness': "⚠️ Резервная база"
+            }
+            source = 'backup'
+
     if result:
-        if len(result['codes']) > 15: result['codes'] = result['codes'][:15]
+        if len(result['codes']) > 15:
+            result['codes'] = result['codes'][:15]
         CACHE[cache_key] = (now, result, source)
-        return result, source
-    return None, None
+        return result, source, source != 'backup'
 
-# ============ КОМАНДЫ БОТА ============
+    return None, None, False
+
+def get_steam_deals():
+    now = time.time()
+    cache_key = "steam_final"
+
+    if cache_key in CACHE:
+        ts, data, src = CACHE[cache_key]
+        if now - ts < CACHE_TTL:
+            return data, src, True
+
+    print("[GET] steam: CheapShark API...")
+    result = parse_steam_deals()
+    if result:
+        source = 'cheapshark'
+        print(f"[GET] steam: OK, {len(result['deals'])} сделок")
+        CACHE[cache_key] = (now, result, source)
+        return result, source, True
+
+    print("[GET] steam: Backup fallback")
+    result = {
+        'deals': STEAM_BACKUP,
+        'source': 'Backup',
+        'freshness': "⚠️ Резервная база"
+    }
+    CACHE[cache_key] = (now, result, 'backup')
+    return result, 'backup', False
+
+# =============================================================
+# 8. ОБРАБОТЧИКИ КОМАНД
+# =============================================================
+
 @bot.message_handler(commands=['start'])
-def start(message):
-    bot.send_message(message.chat.id, "🤖 <b>Tirk Systems v4.1 — Render Cloud</b>\n\n/genshin — промокоды\n/roblox — Blox Fruits\n/status — статус", parse_mode='HTML')
+def cmd_start(message):
+    text = (
+        "<b>🤖 Tirk Systems v5.0 — Полный бак</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "<b>🎮 Игровые промокоды:</b>\n"
+        "  /genshin — Genshin Impact\n"
+        "  /roblox — Blox Fruits\n"
+        "  /kinglegacy — King Legacy\n"
+        "  /astd — All Star Tower Defense\n\n"
+        "<b>🛒 Игровые скидки:</b>\n"
+        "  /steam — Горячие скидки Steam\n\n"
+        "<b>📊 Система:</b>\n"
+        "  /status — Статус и источники\n\n"
+        "<i>💡 Все данные берутся из Fandom Wiki и проверяются на актуальность.\n"
+        "Просроченные коды отфильтрованы автоматически.</i>"
+    )
+    bot.send_message(message.chat.id, text)
 
-@bot.message_handler(commands=['genshin', 'roblox'])
-def handle_codes(message):
-    is_genshin = message.text == '/genshin'
-    game_key = 'genshin' if is_genshin else 'roblox'
-    game_title = '🎮 Genshin Impact' if is_genshin else '🍎 Blox Fruits'
+@bot.message_handler(commands=['genshin'])
+def cmd_genshin(message):
     bot.send_chat_action(message.chat.id, 'typing')
-    data, source = get_codes(game_key)
-    
-    if data and data.get('codes'):
-        lines = [f"🤖 <b>{game_title}</b>", f"<i>{data['freshness']}</i>", ""]
-        for item in data['codes']:
-            age_badge = f" ({item['age']})" if item['age'] != 'актуально' else ""
-            lines.append(f"• <b>{item['code']}</b>{age_badge} — {item['desc']}")
-        final_text = "\n".join(lines)
-    else: final_text = BACKUP_CODES[game_key]
-    bot.send_message(message.chat.id, final_text, parse_mode='HTML', disable_web_page_preview=True)
+    data, source, is_live = get_game_codes('genshin')
+
+    if not data:
+        bot.send_message(message.chat.id, "❌ Не удалось загрузить данные.")
+        return
+
+    text = make_header("🎮", "Genshin Impact", data['freshness'])
+    for item in data['codes']:
+        text += f"• <code>{item['code']}</code> — {item['desc']}\n"
+    text += make_footer(source, is_live)
+
+    bot.send_message(message.chat.id, text, disable_web_page_preview=True)
+
+@bot.message_handler(commands=['roblox'])
+def cmd_roblox(message):
+    bot.send_chat_action(message.chat.id, 'typing')
+    data, source, is_live = get_game_codes('bloxfruits')
+
+    if not data:
+        bot.send_message(message.chat.id, "❌ Не удалось загрузить данные.")
+        return
+
+    text = make_header("🍎", "Blox Fruits", data['freshness'])
+    for item in data['codes']:
+        text += f"• <code>{item['code']}</code> — {item['desc']}\n"
+    text += make_footer(source, is_live)
+
+    bot.send_message(message.chat.id, text, disable_web_page_preview=True)
+
+@bot.message_handler(commands=['kinglegacy'])
+def cmd_kinglegacy(message):
+    bot.send_chat_action(message.chat.id, 'typing')
+    data, source, is_live = get_game_codes('kinglegacy')
+
+    if not data:
+        bot.send_message(message.chat.id, "❌ Не удалось загрузить данные.")
+        return
+
+    text = make_header("👑", "King Legacy", data['freshness'])
+    for item in data['codes']:
+        text += f"• <code>{item['code']}</code> — {item['desc']}\n"
+    text += make_footer(source, is_live)
+
+    bot.send_message(message.chat.id, text, disable_web_page_preview=True)
+
+@bot.message_handler(commands=['astd'])
+def cmd_astd(message):
+    bot.send_chat_action(message.chat.id, 'typing')
+    data, source, is_live = get_game_codes('astd')
+
+    if not data:
+        bot.send_message(message.chat.id, "❌ Не удалось загрузить данные.")
+        return
+
+    text = make_header("⭐", "All Star Tower Defense", data['freshness'])
+    for item in data['codes']:
+        text += f"• <code>{item['code']}</code> — {item['desc']}\n"
+    text += make_footer(source, is_live)
+
+    bot.send_message(message.chat.id, text, disable_web_page_preview=True)
+
+@bot.message_handler(commands=['steam'])
+def cmd_steam(message):
+    bot.send_chat_action(message.chat.id, 'typing')
+    data, source, is_live = get_steam_deals()
+
+    if not data:
+        bot.send_message(message.chat.id, "❌ Не удалось загрузить данные.")
+        return
+
+    text = make_header("🛒", "Steam Deals", data['freshness'])
+
+    for deal in data['deals'][:10]:
+        old = f" {deal['old_price']}" if deal.get('old_price') else ''
+        text += f"🎮 <b>{deal['title']}</b>\n"
+        text += f"   💰 {deal['price']}{old} 🔥 <b>{deal['discount']}</b>\n"
+        if deal.get('url'):
+            text += f"   🔗 <a href='{deal['url']}'>Купить</a>\n"
+        text += "\n"
+
+    if not is_live:
+        text += "\n<i>⚠️ Показана резервная база — проверьте актуальность цен.</i>"
+    else:
+        text += "\n<i>💡 Данные с CheapShark API в реальном времени.</i>"
+
+    bot.send_message(message.chat.id, text, disable_web_page_preview=True)
 
 @bot.message_handler(commands=['status'])
-def status(message):
-    lines = []
-    for game in ['genshin', 'roblox']:
-        cache_key = f"{game}_final"
+def cmd_status(message):
+    lines = ["<b>📊 Tirk Systems v5.0 — Статус</b>", "━━━━━━━━━━━━━━━━━━━━━━", ""]
+
+    games = [
+        ('genshin', '🎮 Genshin Impact'),
+        ('bloxfruits', '🍎 Blox Fruits'),
+        ('kinglegacy', '👑 King Legacy'),
+        ('astd', '⭐ ASTD'),
+    ]
+
+    for key, name in games:
+        cache_key = f"{key}_final"
         if cache_key in CACHE:
             ts, data, src = CACHE[cache_key]
-            lines.append(f"• <b>{game}</b>: {time_ago(ts)} | {src}")
-        else: lines.append(f"• <b>{game}</b>: нет данных")
-    bot.send_message(message.chat.id, "📊 <b>Статус:</b>\n" + "\n".join(lines), parse_mode='HTML')
+            ago = time_ago(ts)
+            src_emoji = "🟢" if src == 'fandom' else "🟠" if src == 'reddit' else "⚠️"
+            lines.append(f"{src_emoji} <b>{name}</b>: {ago} | {data['freshness']}")
+        else:
+            lines.append(f"⬜ <b>{name}</b>: ещё не запрашивалось")
+
+    lines.append("")
+
+    if 'steam_final' in CACHE:
+        ts, data, src = CACHE['steam_final']
+        ago = time_ago(ts)
+        src_emoji = "🟢" if src == 'cheapshark' else "⚠️"
+        lines.append(f"{src_emoji} <b>🛒 Steam</b>: {ago} | {data['freshness']}")
+    else:
+        lines.append(f"⬜ <b>🛒 Steam</b>: ещё не запрашивалось")
+
+    lines.append("")
+    lines.append(f"<i>⏱️ Кэш обновляется каждые {CACHE_TTL//60} минут</i>")
+
+    bot.send_message(message.chat.id, "\n".join(lines))
+
+# =============================================================
+# 9. FLASK WEB-SERVER (для Render)
+# =============================================================
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Tirk Systems v5.0 is online!"
+
+@app.route('/health')
+def health():
+    return {"status": "ok", "version": "5.0", "timestamp": time.time()}
+
+def run_flask():
+    app.run(host='0.0.0.0', port=PORT)
+
+# =============================================================
+# 10. ЗАПУСК
+# =============================================================
 
 if __name__ == '__main__':
-    print("🌍 Запуск веб-сервера для Render...")
-    # Запускаем Flask-сервер в отдельном потоке, чтобы он слушал порт 10000
-    server_thread = Thread(target=run_web_server)
-    server_thread.daemon = True
-    server_thread.start()
-    
-    print("🚀 Бот Tirk Systems запущен!")
-    bot.infinity_polling(timeout=60, long_polling_timeout=60)
+    print("=" * 60)
+    print("🚀 Tirk Systems v5.0 — Полный бак")
+    print("=" * 60)
+    print(f"📡 Flask-сервер: http://0.0.0.0:{PORT}")
+    print(f"🤖 Telegram-бот: инициализация...")
+    print(f"💾 Кэш: {CACHE_TTL} секунд")
+    print("=" * 60)
+
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    print(f"✅ Flask запущен в потоке (port={PORT})")
+
+    print("✅ Бот запущен, ждём команды...")
+    try:
+        bot.infinity_polling(timeout=60, long_polling_timeout=60)
+    except Exception as e:
+        print(f"[FATAL] Бот упал: {e}")
