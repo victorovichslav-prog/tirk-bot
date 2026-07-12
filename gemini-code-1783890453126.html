@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tirk Systems — Экосистема Автоматизации</title>
+    <!-- Подключаем Tailwind CSS для крутого современного дизайна -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Иконки FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0d0e12;
+        }
+        .glow-cyan {
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+        }
+        .glow-button {
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+            transition: all 0.3s ease;
+        }
+        .glow-button:hover {
+            box-shadow: 0 0 25px rgba(6, 182, 212, 0.7);
+            transform: translateY(-2px);
+        }
+        .glass {
+            background: rgba(20, 22, 31, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen flex flex-col justify-between overflow-x-hidden">
+
+    <!-- ФОНОВЫЕ ЭФФЕКТЫ -->
+    <div class="absolute top-0 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-[120px] pointer-events-none"></div>
+    <div class="absolute bottom-10 right-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px] pointer-events-none"></div>
+
+    <!-- НАВИГАЦИЯ -->
+    <header class="sticky top-0 z-50 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+        <nav class="glass rounded-2xl px-6 py-4 flex items-center justify-between shadow-lg">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-md">
+                    <i class="fa-solid fa-layer-group text-slate-900 text-lg font-bold"></i>
+                </div>
+                <span class="text-xl font-bold tracking-wider bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">TIRK SYSTEMS</span>
+            </div>
+            
+            <!-- Интерактивные табы -->
+            <div class="flex space-x-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800/50">
+                <button onclick="switchTab('main')" id="tab-main" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 bg-cyan-500 text-slate-900 font-semibold shadow">
+                    Главная
+                </button>
+                <button onclick="switchTab('bot')" id="tab-bot" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 text-slate-400 hover:text-white">
+                    Tirk loot Bot
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ОСНОВНОЙ КОНТЕНТ -->
+    <main class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-12 flex-grow flex items-center justify-center">
+        
+        <!-- ВКЛАДКА: ГЛАВНАЯ -->
+        <section id="content-main" class="tab-content w-full grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            <div class="lg:col-span-7 space-y-6 text-center lg:text-left">
+                <div class="inline-flex items-center space-x-2 bg-cyan-500/10 border border-cyan-500/20 px-3 py-1 rounded-full text-cyan-400 text-xs font-semibold tracking-wide uppercase mx-auto lg:mx-0">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                    <span>Next-Gen Автоматизация</span>
+                </div>
+                <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-white leading-tight">
+                    Создаем автономные <br>
+                    <span class="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">цифровые системы</span>
+                </h1>
+                <p class="text-base sm:text-lg text-slate-400 max-w-xl mx-auto lg:mx-0">
+                    Tirk Systems — это технологическая лаборатория. Мы превращаем сложные процессы сбора, анализа и мониторинга данных в полностью автоматизированные микросервисы, работающие 24/7.
+                </p>
+                <div class="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
+                    <button onclick="switchTab('bot')" class="glow-button w-full sm:w-auto bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 font-bold px-8 py-4 rounded-xl flex items-center justify-center space-x-3">
+                        <span>Открыть Tirk loot Bot</span>
+                        <i class="fa-solid fa-arrow-right text-sm"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="lg:col-span-5 flex justify-center relative">
+                <div class="w-72 h-72 bg-blue-500/20 rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 blur-3xl"></div>
+                <!-- Абстрактная интерактивная карточка архитектуры -->
+                <div class="glass w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4 glow-cyan relative z-10 animate-bounce transition duration-1000" style="animation-duration: 4s;">
+                    <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+                        <span class="text-xs text-slate-500 font-mono">SYSTEM_CORE // ONLINE</span>
+                        <div class="flex space-x-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-500/70"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-yellow-500/70"></span>
+                            <span class="w-2.5 h-2.5 rounded-full bg-green-500/70"></span>
+                        </div>
+                    </div>
+                    <div class="space-y-3 font-mono text-xs text-cyan-400/90">
+                        <p><span class="text-slate-600">></span> initialization tirk_core...</p>
+                        <p><span class="text-slate-600">></span> flask server active on port 10000</p>
+                        <p><span class="text-slate-600">></span> live stream api parsing: OK</p>
+                        <p><span class="text-green-400"><span class="text-slate-600">></span> status: system fully operational</span></p>
+                    </div>
+                    <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-server text-slate-500 text-sm"></i>
+                            <span class="text-xs text-slate-400 font-medium">Render Cloud Node</span>
+                        </div>
+                        <span class="text-[10px] bg-green-500/10 text-green-400 px-2 py-0.5 rounded-md border border-green-500/20 font-bold">100% UP</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ВКЛАДКА: BOT INFO -->
+        <section id="content-bot" class="tab-content w-full hidden max-w-4xl mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+                
+                <!-- Левая колонка: Профиль бота в стиле ТГ-настроек -->
+                <div class="md:col-span-5 glass rounded-2xl p-6 shadow-xl space-y-6 flex flex-col items-center text-center">
+                    <div class="relative group">
+                        <!-- Имитация аватарки со скрина (микросхема на синем фоне) -->
+                        <div class="w-32 h-32 rounded-full border-4 border-slate-800 overflow-hidden shadow-2xl bg-gradient-to-tr from-blue-900 via-cyan-800 to-blue-600 flex items-center justify-center relative">
+                            <i class="fa-solid fa-microchip text-cyan-300 text-5xl opacity-80"></i>
+                            <div class="absolute inset-0 bg-cyan-500/10 mix-blend-overlay"></div>
+                        </div>
+                        <span class="absolute bottom-1 right-2 w-5 h-5 bg-green-500 border-4 border-[#14161f] rounded-full"></span>
+                    </div>
+                    
+                    <div class="space-y-1">
+                        <h2 class="text-2xl font-bold text-white">Tirk loot Bot</h2>
+                        <p class="text-sm text-cyan-400 font-mono">@tirk_loot_bot</p>
+                    </div>
+
+                    <a href="https://t.me/tirk_loot_bot" target="_blank" class="glow-button w-full bg-cyan-500 text-slate-950 font-bold py-3.5 rounded-xl flex items-center justify-center space-x-2 text-sm">
+                        <i class="fa-brands fa-telegram text-lg"></i>
+                        <span>Запустить в Telegram</span>
+                    </a>
+                </div>
+
+                <!-- Правая колонка: Техническое описание -->
+                <div class="md:col-span-7 space-y-6">
+                    <div class="glass rounded-2xl p-6 space-y-4">
+                        <h3 class="text-lg font-bold text-white flex items-center space-x-2 border-b border-slate-800 pb-3">
+                            <i class="fa-solid fa-circle-info text-cyan-400"></i>
+                            <span>Автоматизация сбора данных и мониторинга</span>
+                        </h3>
+                        <p class="text-sm leading-relaxed text-slate-400">
+                            <strong class="text-slate-200">Tirk loot Bot</strong> — это наш флагманский автономный микросервис. Продукт спроектирован для автоматического поиска, агрегации и структурирования динамически обновляющихся данных из верифицированных веб-источников, игровых платформ и медиа-ресурсов.
+                        </p>
+                        <p class="text-sm leading-relaxed text-slate-400">
+                            Сервис полностью устраняет необходимость ручного мониторинга сайтов, предоставляя пользователям актуальные цифровые маркеры, промокоды и аналитику скидок в режиме реального времени через оптимизированный интерфейс мессенджера.
+                        </p>
+                    </div>
+
+                    <!-- Сетка преимуществ -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bg-slate-900/40 border border-slate-800/60 rounded-xl p-4 space-y-2">
+                            <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+                                <i class="fa-solid fa-bolt text-sm"></i>
+                            </div>
+                            <h4 class="text-sm font-semibold text-white">Интеллектуальный парсинг</h4>
+                            <p class="text-xs text-slate-400">Модули для прямой интеграции с внешними API и непрерывный сквозной мониторинг.</p>
+                        </div>
+                        
+                        <div class="bg-slate-900/40 border border-slate-800/60 rounded-xl p-4 space-y-2">
+                            <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+                                <i class="fa-solid fa-filter text-sm"></i>
+                            </div>
+                            <h4 class="text-sm font-semibold text-white">Фильтрация контента</h4>
+                            <p class="text-xs text-slate-400">Алгоритмы верификации на лету отсеивают устаревшие или нерабочие базы.</p>
+                        </div>
+
+                        <div class="bg-slate-900/40 border border-slate-800/60 rounded-xl p-4 space-y-2">
+                            <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+                                <i class="fa-solid fa-memory text-sm"></i>
+                            </div>
+                            <h4 class="text-sm font-semibold text-white">Умное кэширование</h4>
+                            <p class="text-xs text-slate-400">Снижает нагрузку на сервера и обеспечивает мгновенный отклик на команды.</p>
+                        </div>
+
+                        <div class="bg-slate-900/40 border border-slate-800/60 rounded-xl p-4 space-y-2">
+                            <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+                                <i class="fa-solid fa-shield-halved text-sm"></i>
+                            </div>
+                            <h4 class="text-sm font-semibold text-white">Отказоустойчивость</h4>
+                            <p class="text-xs text-slate-400">Многопоточный бэкэнд на базе Flask гарантирует стабильную автономную работу.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ПОДВАЛ -->
+    <footer class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 pt-12">
+        <div class="border-t border-slate-900 pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 space-y-3 sm:space-y-0">
+            <p>&copy; 2026 Tirk Systems. Все права защищены.</p>
+            <div class="flex space-x-4 font-mono">
+                <span>STATUS: ACTIVE</span>
+                <span>v5.2 // RENDER_NODE</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- СКРИПТ ПЕРЕКЛЮЧЕНИЯ ТАБОВ -->
+    <script>
+        function switchTab(tabId) {
+            // Скрываем весь контент
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // Сбрасываем стили кнопок
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-cyan-500', 'text-slate-950', 'font-semibold', 'shadow');
+                btn.classList.add('text-slate-400', 'hover:text-white');
+            });
+            
+            // Показываем нужный контент
+            document.getElementById('content-' + tabId).classList.remove('hidden');
+            
+            // Активируем нужную кнопку
+            const activeBtn = document.getElementById('tab-' + tabId);
+            activeBtn.classList.add('bg-cyan-500', 'text-slate-950', 'font-semibold', 'shadow');
+            activeBtn.classList.remove('text-slate-400', 'hover:text-white');
+        }
+    </script>
+</body>
+</html>
